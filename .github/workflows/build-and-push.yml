@@ -36,7 +36,8 @@ jobs:
                   node-version: 'latest'
             - name: Test amd64 image
               run: |
-                  docker compose up --no-build --pull never -d
+                  # Keep the existing HTTP checks on native fetching.
+                  FTR_FLARESOLVERR_URL= docker compose up --no-build --no-deps --pull never -d fullfeedrss
                   sleep 5s
                   npx -y httpyac calls.http --all --output short --output-failed exchange
                   docker compose down
