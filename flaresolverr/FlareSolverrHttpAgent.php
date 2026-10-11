@@ -1,6 +1,6 @@
 <?php
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Browser-backed downloader for FiveFilters' article extraction endpoint.
+// Browser-backed downloader for FiveFilters' feeds and article pages.
 
 class FlareSolverrException extends RuntimeException {}
 
@@ -8,6 +8,26 @@ class FlareSolverrHttpAgent extends HumbleHttpAgent
 {
     protected $flaresolverrUrl;
     protected $maxTimeout;
+
+    public static function isEnabled($mode)
+    {
+        // Supplied article HTML never needs another download.
+        if ($mode === 'simple' && isset($_REQUEST['inputhtml'])) return false;
+        $configured = trim(getenv('FTR_FLARESOLVERR_URL')) !== '';
+        if (isset($_REQUEST['flaresolverr'])) {
+            $value = $_REQUEST['flaresolverr'];
+            if ($value === '0' || $value === 0) return false;
+            if ($value !== '1' && $value !== 1) {
+                throw new FlareSolverrException('The flaresolverr parameter must be 0 or 1.');
+            }
+            if (!$configured) {
+                throw new FlareSolverrException('FlareSolverr is not configured. Set FTR_FLARESOLVERR_URL on the server.');
+            }
+            return true;
+        }
+        // Preserve the existing Readable API behavior; feed conversion is opt-in.
+        return $mode === 'simple' && $configured;
+    }
 
     public function __construct($requestOptions = null, $method = null)
     {
@@ -45,9 +65,9 @@ class FlareSolverrHttpAgent extends HumbleHttpAgent
             if ($this->rewriteHashbangFragment) $requestUrl = $this->rewriteHashbangFragment($requestUrl);
             $requestUrl = $this->removeFragment($requestUrl);
             if (!$this->validateUrl($requestUrl)) {
-                throw new FlareSolverrException('Invalid article URL for FlareSolverr.');
+                throw new FlareSolverrException('Invalid URL for FlareSolverr.');
             }
-            $this->debug('Fetching article with FlareSolverr: '.$requestUrl);
+            $this->debug('Fetching with FlareSolverr: '.$requestUrl);
             $payload = json_encode(array(
                 'cmd' => 'request.get',
                 'url' => $requestUrl,
@@ -65,26 +85,80 @@ class FlareSolverrHttpAgent extends HumbleHttpAgent
             $solution = $result['solution'];
             $status = isset($solution['status']) ? filter_var($solution['status'], FILTER_VALIDATE_INT) : false;
             if ($status === false || $status < 200 || $status >= 300) {
-                throw new FlareSolverrException('FlareSolverr article HTTP status: '.($status === false ? 'missing' : $status));
+                throw new FlareSolverrException('FlareSolverr HTTP status: '.($status === false ? 'missing' : $status));
             }
             if (!isset($solution['response']) || !is_string($solution['response']) || trim($solution['response']) === '') {
-                throw new FlareSolverrException('FlareSolverr returned empty article HTML.');
+                throw new FlareSolverrException('FlareSolverr returned empty content.');
             }
             if (!isset($solution['url']) || !is_string($solution['url']) || !$this->validateUrl($solution['url'])) {
                 throw new FlareSolverrException('FlareSolverr returned an invalid final URL.');
             }
-            $this->debug('FlareSolverr article HTTP status: '.$status.'; final URL: '.$solution['url']);
+            $this->debug('FlareSolverr HTTP status: '.$status.'; final URL: '.$solution['url']);
+            $response = $this->normalizeResponse($solution['response']);
             $this->requests[$original] = array(
                 'original_url' => $original,
                 'effective_url' => $solution['url'],
                 'status_code' => $status,
                 // response is a rendered, decoded DOM, not the original wire body.
                 // Original compression, length and charset headers would corrupt it.
-                'headers' => "Content-Type: text/html; charset=UTF-8\r\n",
-                'body' => $solution['response'],
+                // SimplePie's feed adapter expects a complete HTTP status line.
+                'headers' => 'HTTP/1.1 '.$status." OK\r\n".$response['headers'],
+                'body' => $response['body'],
                 'method' => 'GET'
             );
         }
+    }
+
+    protected function feedXml($body)
+    {
+        // FlareSolverr's JSON contains rendered UTF-8 text, including XML views.
+        $xml = preg_replace('~^\s*<\?xml\b.*?\?>~s', '<?xml version="1.0" encoding="UTF-8"?>', $body, 1);
+        $previous = libxml_use_internal_errors(true);
+        $doc = new DOMDocument('1.0', 'UTF-8');
+        $valid = $doc->loadXML($xml, LIBXML_NONET);
+        $isFeed = $valid && $doc->documentElement &&
+            in_array($doc->documentElement->localName, array('rss', 'feed', 'RDF'), true);
+        libxml_clear_errors();
+        libxml_use_internal_errors($previous);
+        return $isFeed ? $xml : false;
+    }
+
+    protected function normalizeResponse($body)
+    {
+        $xml = $this->feedXml($body);
+        if ($xml === false && stripos($body, '<pre') !== false) {
+            // Chromium displays RSS/Atom as escaped XML inside a single <pre>.
+            $previous = libxml_use_internal_errors(true);
+            $doc = new DOMDocument('1.0', 'UTF-8');
+            $doc->loadHTML('<?xml encoding="UTF-8"?>'.$body, LIBXML_NONET);
+            libxml_clear_errors();
+            libxml_use_internal_errors($previous);
+            $bodyNode = $doc->getElementsByTagName('body')->item(0);
+            $pre = null;
+            $singlePre = true;
+            if ($bodyNode) {
+                foreach ($bodyNode->childNodes as $node) {
+                    if ($node->nodeType === XML_ELEMENT_NODE) {
+                        if ($node->nodeName !== 'pre' || $pre !== null) {
+                            $singlePre = false;
+                            break;
+                        }
+                        $pre = $node;
+                    } elseif ($node->nodeType === XML_TEXT_NODE && trim($node->textContent) !== '') {
+                        $singlePre = false;
+                        break;
+                    }
+                }
+            }
+            if ($singlePre && $pre !== null) {
+                // textContent decodes the HTML wrapper once, preserving XML entities.
+                $xml = $this->feedXml($pre->textContent);
+            }
+        }
+        return array(
+            'headers' => $xml === false ? "Content-Type: text/html; charset=UTF-8\r\n" : "Content-Type: application/xml; charset=UTF-8\r\n",
+            'body' => $xml === false ? $body : $xml
+        );
     }
 
     protected function postJson($payload)
