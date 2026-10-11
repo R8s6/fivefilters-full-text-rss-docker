@@ -32,6 +32,14 @@ RUN		docker-php-ext-install tidy
 COPY --from=gitsrc /ftr /var/www/html
 COPY --from=gitconfig /ftr-site-config/.* /ftr-site-config/* /var/www/html/site_config/standard/
 
+# Optional browser-backed fetching for extract.php; native fetching stays default.
+COPY flaresolverr /tmp/ftr-flaresolverr
+RUN php /tmp/ftr-flaresolverr/install.php /var/www/html && \
+    php -l /var/www/html/makefulltextfeed.php && \
+    php -l /var/www/html/extract.php && \
+    php /tmp/ftr-flaresolverr/test.php /var/www/html && \
+    rm -rf /tmp/ftr-flaresolverr
+
 RUN		mkdir -p /var/www/html/cache/rss && \
 			chmod -Rv 777 /var/www/html/cache && \
 			chmod -Rv 777 /var/www/html/site_config
@@ -39,4 +47,5 @@ RUN		mkdir -p /var/www/html/cache/rss && \
 VOLUME	/var/www/html/cache
 
 COPY	custom_config.php /var/www/html/
+
 
