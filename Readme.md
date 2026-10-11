@@ -24,13 +24,10 @@ services:
     environment:
       # Leave empty to disable admin section
       - FTR_ADMIN_PASSWORD=
-      # An empty URL disables FlareSolverr.
-      - FTR_FLARESOLVERR_URL=${FTR_FLARESOLVERR_URL-http://flaresolverr:8191}
+      # Optional FlareSolverr instance URL; disabled by default
+      - FTR_FLARESOLVERR_URL=${FTR_FLARESOLVERR_URL:-}
       # Optional challenge timeout in milliseconds
       - FTR_FLARESOLVERR_TIMEOUT=${FTR_FLARESOLVERR_TIMEOUT:-60000}
-    depends_on:
-      flaresolverr:
-        condition: service_healthy
     volumes:
       - "rss-cache:/var/www/html/cache/rss"
       - "./custom:/var/www/html/site_config/custom"
@@ -38,18 +35,13 @@ services:
       - "80:80"
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
+    profiles: [flaresolverr]
     restart: unless-stopped
     environment:
       # Optional FlareSolverr settings
       - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
       - LOG_HTML=${FLARESOLVERR_LOG_HTML:-false}
       - TZ=${TZ:-UTC}
-    healthcheck:
-      test: ["CMD", "curl", "-fsS", "--max-time", "5", "http://localhost:8191/health"]
-      interval: 30s
-      timeout: 10s
-      start_period: 60s
-      retries: 3
 volumes:
   rss-cache:
 ```
@@ -66,8 +58,13 @@ volumes:
 
 ## FlareSolverr
 
-The example Compose file starts FlareSolverr at `http://flaresolverr:8191`.
-Override `FTR_FLARESOLVERR_URL` with your `flaresolverr_url` if needed.
+Optional. Enable the bundled service with:
+
+```sh
+FTR_FLARESOLVERR_URL=http://flaresolverr:8191 docker compose --profile flaresolverr up -d
+```
+
+For an existing service, set `FTR_FLARESOLVERR_URL=flaresolverr_url` in `.env`.
 Optional: `FTR_FLARESOLVERR_TIMEOUT` in milliseconds (default: `60000`).
 
 Check **FlareSolverr** in the web UI or use:
