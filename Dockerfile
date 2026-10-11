@@ -12,6 +12,11 @@ FROM	alpine/git AS gitconfig
 WORKDIR	/ftr-site-config
 RUN	git clone https://github.com/fivefilters/ftr-site-config . 
 
+# Apply bundled HTTP header overrides while retaining the latest extraction rules.
+COPY site_config/overrides/phoronix.com.txt /tmp/phoronix.com.txt
+RUN printf '\n' >> /ftr-site-config/phoronix.com.txt && \
+    cat /tmp/phoronix.com.txt >> /ftr-site-config/phoronix.com.txt
+
 
 # Do not upgrade. More recent versions of PHP are seg faulting. 
 FROM	php:5-apache
