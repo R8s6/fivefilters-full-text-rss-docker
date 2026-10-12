@@ -24,8 +24,8 @@ services:
     environment:
       # Leave empty to disable admin section
       - FTR_ADMIN_PASSWORD=
-      # Optional: http://flaresolverr:8191 for the bundled service; empty disables it
-      - FTR_FLARESOLVERR_URL=
+      # FlareSolverr URL
+      - FTR_FLARESOLVERR_URL=http://flaresolverr:8191
       # Optional challenge timeout in milliseconds
       - FTR_FLARESOLVERR_TIMEOUT=60000
     volumes:
@@ -33,6 +33,7 @@ services:
       - "./custom:/var/www/html/site_config/custom"
     ports:
       - "80:80"
+
   flaresolverr:
     # DockerHub mirror flaresolverr/flaresolverr:latest
     image: ghcr.io/flaresolverr/flaresolverr:latest
@@ -64,7 +65,7 @@ volumes:
 
 ## FlareSolverr
 
-Optional. Set `FTR_FLARESOLVERR_URL=http://flaresolverr:8191` in `compose.yml` for the bundled service, or `flaresolverr_url` for an existing instance. Remove the `flaresolverr` service if unused.
+Compose starts FlareSolverr by default. To disable it, clear `FTR_FLARESOLVERR_URL` and remove the `flaresolverr` service. For an existing instance, set `FTR_FLARESOLVERR_URL=flaresolverr_url` and remove the bundled service.
 Optional: `FTR_FLARESOLVERR_TIMEOUT` in milliseconds (default: `60000`).
 
 Check **FlareSolverr** in the web UI or use:
