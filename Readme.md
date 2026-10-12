@@ -65,8 +65,12 @@ volumes:
 
 ## FlareSolverr
 
-Compose starts FlareSolverr by default. To disable it, clear `FTR_FLARESOLVERR_URL` and remove the `flaresolverr` service. For an existing instance, set `FTR_FLARESOLVERR_URL=flaresolverr_url` and remove the bundled service.
-Optional: `FTR_FLARESOLVERR_TIMEOUT` in milliseconds (default: `60000`).
+[FlareSolverr](https://github.com/Flaresolverr/Flaresolverr) is a proxy server to bypass Cloudflare and DDoS-GUARD protection.
+
+To disable it, clear `FTR_FLARESOLVERR_URL` and remove the `flaresolverr` service in the compose file. 
+
+For an existing instance, set `FTR_FLARESOLVERR_URL=flaresolverr_url` and remove the bundled service.
+
 
 Check **FlareSolverr** in the web UI or use:
 
