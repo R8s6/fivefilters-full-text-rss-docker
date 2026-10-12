@@ -6,23 +6,29 @@ services:
     environment:
       # Leave empty to disable admin section
       - FTR_ADMIN_PASSWORD=
-      # Optional FlareSolverr instance URL; disabled by default
-      - FTR_FLARESOLVERR_URL=${FTR_FLARESOLVERR_URL:-}
+      # Optional: http://flaresolverr:8191 for the bundled service; empty disables it
+      - FTR_FLARESOLVERR_URL=
       # Optional challenge timeout in milliseconds
-      - FTR_FLARESOLVERR_TIMEOUT=${FTR_FLARESOLVERR_TIMEOUT:-60000}
+      - FTR_FLARESOLVERR_TIMEOUT=60000
     volumes:
       - "rss-cache:/var/www/html/cache/rss"
       - "./custom:/var/www/html/site_config/custom"
     ports:
       - "80:80"
   flaresolverr:
+    # DockerHub mirror flaresolverr/flaresolverr:latest
     image: ghcr.io/flaresolverr/flaresolverr:latest
-    profiles: [flaresolverr]
-    restart: unless-stopped
+    container_name: flaresolverr
     environment:
-      # Optional FlareSolverr settings
-      - LOG_LEVEL=${FLARESOLVERR_LOG_LEVEL:-info}
-      - LOG_HTML=${FLARESOLVERR_LOG_HTML:-false}
-      - TZ=${TZ:-UTC}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_FILE=${LOG_FILE:-none}
+      - LOG_HTML=${LOG_HTML:-false}
+      - CAPTCHA_SOLVER=${CAPTCHA_SOLVER:-none}
+      - TZ=Europe/London
+    ports:
+      - "${PORT:-8191}:8191"
+    volumes:
+      - /var/lib/flaresolver:/config
+    restart: unless-stopped
 volumes:
   rss-cache:
